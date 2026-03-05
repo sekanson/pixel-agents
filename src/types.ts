@@ -1,5 +1,13 @@
 import type * as vscode from 'vscode';
 
+export interface UsageData {
+	inputTokens: number;
+	outputTokens: number;
+	cacheCreationTokens: number;
+	cacheReadTokens: number;
+	model: string | null;
+}
+
 export interface AgentState {
 	id: number;
 	name: string;
@@ -17,6 +25,7 @@ export interface AgentState {
 	isWaiting: boolean;
 	permissionSent: boolean;
 	hadToolsInTurn: boolean;
+	usage: UsageData;
 }
 
 export interface PersistedAgent {

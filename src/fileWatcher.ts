@@ -201,6 +201,7 @@ function adoptTerminalForFile(
 		isWaiting: false,
 		permissionSent: false,
 		hadToolsInTurn: false,
+		usage: { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, model: null },
 	};
 
 	agents.set(id, agent);
@@ -244,6 +245,7 @@ export function reassignAgentToFile(
 	agent.jsonlFile = newFilePath;
 	agent.fileOffset = 0;
 	agent.lineBuffer = '';
+	agent.usage = { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, model: null };
 	persistAgents();
 
 	// Start watching new file

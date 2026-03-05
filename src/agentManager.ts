@@ -82,6 +82,7 @@ export async function launchNewTerminal(
 		isWaiting: false,
 		permissionSent: false,
 		hadToolsInTurn: false,
+		usage: { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, model: null },
 	};
 
 	agents.set(id, agent);
@@ -207,6 +208,7 @@ export function restoreAgents(
 			isWaiting: false,
 			permissionSent: false,
 			hadToolsInTurn: false,
+			usage: { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, model: null },
 		};
 
 		agents.set(p.id, agent);
@@ -326,6 +328,22 @@ export function sendCurrentAgentStatuses(
 				type: 'agentStatus',
 				id: agentId,
 				status: 'waiting',
+			});
+		}
+		// Re-send accumulated usage data
+		const u = agent.usage;
+		if (u.inputTokens > 0 || u.outputTokens > 0) {
+			webview.postMessage({
+				type: 'agentUsageUpdate',
+				id: agentId,
+				usage: {
+					inputTokens: u.inputTokens,
+					outputTokens: u.outputTokens,
+					cacheCreationTokens: u.cacheCreationTokens,
+					cacheReadTokens: u.cacheReadTokens,
+					totalTokens: u.inputTokens + u.outputTokens + u.cacheCreationTokens + u.cacheReadTokens,
+					model: u.model,
+				},
 			});
 		}
 	}

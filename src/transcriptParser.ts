@@ -57,6 +57,33 @@ export function processTranscriptLine(
 
 		if (record.type === 'assistant' && Array.isArray(record.message?.content)) {
 			cancelWaitingTimer(agentId, waitingTimers);
+
+			// Extract and accumulate usage data
+			const usage = record.message.usage as { input_tokens?: number; output_tokens?: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number } | undefined;
+			if (usage) {
+				agent.usage.inputTokens += usage.input_tokens || 0;
+				agent.usage.outputTokens += usage.output_tokens || 0;
+				agent.usage.cacheCreationTokens += usage.cache_creation_input_tokens || 0;
+				agent.usage.cacheReadTokens += usage.cache_read_input_tokens || 0;
+			}
+			const model = record.message.model as string | undefined;
+			if (model) {
+				agent.usage.model = model;
+			}
+			const u = agent.usage;
+			webview?.postMessage({
+				type: 'agentUsageUpdate',
+				id: agentId,
+				usage: {
+					inputTokens: u.inputTokens,
+					outputTokens: u.outputTokens,
+					cacheCreationTokens: u.cacheCreationTokens,
+					cacheReadTokens: u.cacheReadTokens,
+					totalTokens: u.inputTokens + u.outputTokens + u.cacheCreationTokens + u.cacheReadTokens,
+					model: u.model,
+				},
+			});
+
 			const blocks = record.message.content as Array<{
 				type: string; id?: string; name?: string; input?: Record<string, unknown>;
 			}>;

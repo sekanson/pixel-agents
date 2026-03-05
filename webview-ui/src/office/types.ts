@@ -81,6 +81,15 @@ export interface ToolActivity {
   permissionWait?: boolean
 }
 
+export interface AgentUsageData {
+  inputTokens: number
+  outputTokens: number
+  cacheCreationTokens: number
+  cacheReadTokens: number
+  totalTokens: number
+  model: string | null
+}
+
 export interface PixelTextConfig {
   text: string
   fontSize: string    // '3x5' | '5x7'

@@ -15,6 +15,7 @@ import { ZoomControls } from './components/ZoomControls.js'
 import { BottomToolbar } from './components/BottomToolbar.js'
 import { DebugView } from './components/DebugView.js'
 import { TaskPanel } from './components/TaskPanel.js'
+import { UsagePanel } from './components/UsagePanel.js'
 import { PixelTextEditor } from './office/editor/PixelTextEditor.js'
 
 // Game state lives outside React — updated imperatively by message handlers
@@ -123,13 +124,15 @@ function App() {
 
   const isEditDirty = useCallback(() => editor.isEditMode && editor.isDirty, [editor.isEditMode, editor.isDirty])
 
-  const { agents, selectedAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, layoutReady, loadedAssets } = useExtensionMessages(getOfficeState, editor.setLastSavedLayout, isEditDirty, editor.restoreZoom)
+  const { agents, selectedAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, agentUsage, layoutReady, loadedAssets } = useExtensionMessages(getOfficeState, editor.setLastSavedLayout, isEditDirty, editor.restoreZoom)
 
   const [isDebugMode, setIsDebugMode] = useState(false)
   const [isSeatMode, setIsSeatMode] = useState(false)
   const [isTaskPanelOpen, setIsTaskPanelOpen] = useState(false)
+  const [isUsagePanelOpen, setIsUsagePanelOpen] = useState(false)
 
   const handleToggleTaskPanel = useCallback(() => setIsTaskPanelOpen((prev) => !prev), [])
+  const handleToggleUsagePanel = useCallback(() => setIsUsagePanelOpen((prev) => !prev), [])
 
   const handleToggleDebugMode = useCallback(() => setIsDebugMode((prev) => !prev), [])
   const handleToggleSeatMode = useCallback(() => {
@@ -373,6 +376,61 @@ function App() {
           agentStatuses={agentStatuses}
           subagentTools={subagentTools}
           onSelectAgent={handleSelectAgent}
+        />
+      )}
+
+      {/* Usage button — sağ üst */}
+      <div style={{
+        position: 'absolute',
+        top: 10,
+        right: 30,
+        zIndex: 'var(--pixel-controls-z)' as unknown as number,
+        background: 'var(--pixel-bg)',
+        border: '2px solid var(--pixel-border)',
+        borderRadius: 0,
+        padding: '4px 6px',
+        boxShadow: 'var(--pixel-shadow)',
+      }}>
+        <button
+          onClick={handleToggleUsagePanel}
+          style={
+            isUsagePanelOpen
+              ? {
+                  padding: '5px 10px',
+                  fontSize: '24px',
+                  color: 'var(--pixel-text)',
+                  background: 'var(--pixel-active-bg)',
+                  border: '2px solid var(--pixel-accent)',
+                  borderRadius: 0,
+                  cursor: 'pointer',
+                }
+              : {
+                  padding: '5px 10px',
+                  fontSize: '24px',
+                  color: 'var(--pixel-text)',
+                  background: 'var(--pixel-btn-bg)',
+                  border: '2px solid transparent',
+                  borderRadius: 0,
+                  cursor: 'pointer',
+                }
+          }
+          onMouseEnter={(e) => {
+            if (!isUsagePanelOpen) (e.currentTarget as HTMLElement).style.background = 'var(--pixel-btn-hover-bg)'
+          }}
+          onMouseLeave={(e) => {
+            if (!isUsagePanelOpen) (e.currentTarget as HTMLElement).style.background = 'var(--pixel-btn-bg)'
+          }}
+        >
+          Usage
+        </button>
+      </div>
+
+      {/* Usage Panel */}
+      {isUsagePanelOpen && (
+        <UsagePanel
+          agents={agents}
+          agentUsage={agentUsage}
+          officeState={officeState}
         />
       )}
 
