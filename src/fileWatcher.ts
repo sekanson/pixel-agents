@@ -4,6 +4,13 @@ import * as vscode from 'vscode';
 import type { AgentState } from './types.js';
 import { cancelWaitingTimer, cancelPermissionTimer, clearAgentActivity } from './timerManager.js';
 import { processTranscriptLine } from './transcriptParser.js';
+import type { AchievementHooks } from './transcriptParser.js';
+
+let globalAchievementHooks: AchievementHooks | undefined;
+
+export function setAchievementHooks(hooks: AchievementHooks): void {
+	globalAchievementHooks = hooks;
+}
 import { FILE_WATCHER_POLL_INTERVAL_MS, PROJECT_SCAN_INTERVAL_MS } from './constants.js';
 
 export function startFileWatching(
@@ -71,7 +78,7 @@ export function readNewLines(
 
 		for (const line of lines) {
 			if (!line.trim()) {continue;}
-			processTranscriptLine(agentId, line, agents, waitingTimers, permissionTimers, webview);
+			processTranscriptLine(agentId, line, agents, waitingTimers, permissionTimers, webview, globalAchievementHooks);
 		}
 	} catch (e) {
 		console.log(`[Pixel Agents] Read error for agent ${agentId}: ${e}`);
@@ -202,6 +209,9 @@ function adoptTerminalForFile(
 		permissionSent: false,
 		hadToolsInTurn: false,
 		usage: { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, model: null },
+		lastToolStartTime: 0,
+		recentToolStarts: [],
+		errorCountInTurn: 0,
 	};
 
 	agents.set(id, agent);

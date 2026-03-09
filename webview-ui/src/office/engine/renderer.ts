@@ -2,6 +2,10 @@ import { TileType, TILE_SIZE, CharacterState } from '../types.js'
 import type { TileType as TileTypeVal, FurnitureInstance, Character, SpriteData, Seat, FloorColor } from '../types.js'
 import { getCachedSprite, getOutlineSprite } from '../sprites/spriteCache.js'
 import { getCharacterSprites, BUBBLE_PERMISSION_SPRITE, BUBBLE_WAITING_SPRITE } from '../sprites/spriteData.js'
+import { MOOD_HAPPY_SPRITE, MOOD_ERROR_SPRITE, MOOD_STRESSED_SPRITE } from '../sprites/moodSprites.js'
+import { getPetSprite, isPetFacingLeft } from './pets.js'
+import type { Pet } from './pets.js'
+import { PET_Z_SORT_OFFSET } from '../../constants.js'
 import { getCharacterSprite } from './characters.js'
 import { renderMatrixEffect } from './matrixEffect.js'
 import { getColorizedFloorSprite, hasFloorSprites, WALL_COLOR } from '../floorTiles.js'
@@ -23,6 +27,7 @@ import {
   BUBBLE_FADE_DURATION_SEC,
   BUBBLE_SITTING_OFFSET_PX,
   BUBBLE_VERTICAL_OFFSET_PX,
+  MOOD_BUBBLE_FADE_DURATION_SEC,
   FALLBACK_FLOOR_COLOR,
   SEAT_OWN_COLOR,
   SEAT_AVAILABLE_COLOR,
@@ -105,6 +110,7 @@ export function renderScene(
   zoom: number,
   selectedAgentId: number | null,
   hoveredAgentId: number | null,
+  pets?: Pet[],
 ): void {
   const drawables: ZDrawable[] = []
 
@@ -178,6 +184,44 @@ export function renderScene(
         c.drawImage(cached, drawX, drawY)
       },
     })
+  }
+
+  // Pets
+  if (pets) {
+    for (const pet of pets) {
+      const spriteData = getPetSprite(pet)
+      const flipH = isPetFacingLeft(pet)
+      const cached = getCachedSprite(spriteData, zoom)
+      const petDrawX = Math.round(offsetX + pet.x * zoom - cached.width / 2)
+      const petDrawY = Math.round(offsetY + pet.y * zoom - cached.height)
+      const petZY = pet.y + TILE_SIZE / 2 + PET_Z_SORT_OFFSET
+
+      if (flipH) {
+        const pDX = petDrawX
+        const pDY = petDrawY
+        const pCached = cached
+        drawables.push({
+          zY: petZY,
+          draw: (c) => {
+            c.save()
+            c.translate(pDX + pCached.width, pDY)
+            c.scale(-1, 1)
+            c.drawImage(pCached, 0, 0)
+            c.restore()
+          },
+        })
+      } else {
+        const pDX = petDrawX
+        const pDY = petDrawY
+        const pCached = cached
+        drawables.push({
+          zY: petZY,
+          draw: (c) => {
+            c.drawImage(pCached, pDX, pDY)
+          },
+        })
+      }
+    }
   }
 
   // Sort by Y (lower = in front = drawn later)
@@ -584,6 +628,39 @@ export function renderCharacterNames(
   }
 }
 
+// ── Pet names ───────────────────────────────────────────────────
+
+export function renderPetNames(
+  ctx: CanvasRenderingContext2D,
+  pets: Pet[],
+  offsetX: number,
+  offsetY: number,
+  zoom: number,
+): void {
+  for (const pet of pets) {
+    if (!pet.name) continue
+
+    const nameX = Math.round(offsetX + pet.x * zoom)
+    const nameY = Math.round(offsetY + pet.y * zoom + 1 * zoom)
+
+    const fontSize = Math.max(6, Math.round(7 * zoom))
+    ctx.save()
+    ctx.font = `${fontSize}px "FS Pixel Sans Unicode", monospace`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'top'
+
+    ctx.lineWidth = Math.max(2, Math.round(2 * zoom))
+    ctx.strokeStyle = '#000000'
+    ctx.lineJoin = 'round'
+    ctx.miterLimit = 2
+    ctx.strokeText(pet.name, nameX, nameY)
+
+    ctx.fillStyle = '#ffffff'
+    ctx.fillText(pet.name, nameX, nameY)
+    ctx.restore()
+  }
+}
+
 // ── Speech bubbles ──────────────────────────────────────────────
 
 export function renderBubbles(
@@ -610,6 +687,46 @@ export function renderBubbles(
     // Position: centered above the character's head
     // Character is anchored bottom-center at (ch.x, ch.y), sprite is 16x24
     // Place bubble above head with a small gap; follow sitting offset
+    const sittingOff = ch.state === CharacterState.TYPE ? BUBBLE_SITTING_OFFSET_PX : 0
+    const bubbleX = Math.round(offsetX + ch.x * zoom - cached.width / 2)
+    const bubbleY = Math.round(offsetY + (ch.y + sittingOff - BUBBLE_VERTICAL_OFFSET_PX) * zoom - cached.height - 1 * zoom)
+
+    ctx.save()
+    if (alpha < 1.0) ctx.globalAlpha = alpha
+    ctx.drawImage(cached, bubbleX, bubbleY)
+    ctx.restore()
+  }
+}
+
+// ── Mood bubbles ─────────────────────────────────────────────
+
+const MOOD_SPRITES = {
+  happy: MOOD_HAPPY_SPRITE,
+  error: MOOD_ERROR_SPRITE,
+  stressed: MOOD_STRESSED_SPRITE,
+} as const
+
+export function renderMoodBubbles(
+  ctx: CanvasRenderingContext2D,
+  characters: Character[],
+  offsetX: number,
+  offsetY: number,
+  zoom: number,
+): void {
+  for (const ch of characters) {
+    if (!ch.moodType) continue
+    // Don't render mood if a higher-priority bubble is active
+    if (ch.bubbleType === 'permission' || ch.bubbleType === 'waiting') continue
+
+    const sprite = MOOD_SPRITES[ch.moodType]
+
+    // Compute opacity: fade in last MOOD_BUBBLE_FADE_DURATION_SEC
+    let alpha = 1.0
+    if (ch.moodTimer < MOOD_BUBBLE_FADE_DURATION_SEC) {
+      alpha = ch.moodTimer / MOOD_BUBBLE_FADE_DURATION_SEC
+    }
+
+    const cached = getCachedSprite(sprite, zoom)
     const sittingOff = ch.state === CharacterState.TYPE ? BUBBLE_SITTING_OFFSET_PX : 0
     const bubbleX = Math.round(offsetX + ch.x * zoom - cached.width / 2)
     const bubbleY = Math.round(offsetY + (ch.y + sittingOff - BUBBLE_VERTICAL_OFFSET_PX) * zoom - cached.height - 1 * zoom)
@@ -690,6 +807,7 @@ export function renderFrame(
   tileColors?: Array<FloorColor | null>,
   layoutCols?: number,
   layoutRows?: number,
+  pets?: Pet[],
 ): { offsetX: number; offsetY: number } {
   // Clear
   ctx.clearRect(0, 0, canvasWidth, canvasHeight)
@@ -723,13 +841,21 @@ export function renderFrame(
   // Draw walls + furniture + characters (z-sorted)
   const selectedId = selection?.selectedAgentId ?? null
   const hoveredId = selection?.hoveredAgentId ?? null
-  renderScene(ctx, allFurniture, characters, offsetX, offsetY, zoom, selectedId, hoveredId)
+  renderScene(ctx, allFurniture, characters, offsetX, offsetY, zoom, selectedId, hoveredId, pets)
 
   // Character names (rendered after scene, before bubbles)
   renderCharacterNames(ctx, characters, offsetX, offsetY, zoom)
 
+  // Pet names (rendered after character names)
+  if (pets && pets.length > 0) {
+    renderPetNames(ctx, pets, offsetX, offsetY, zoom)
+  }
+
   // Speech bubbles (always on top of characters)
   renderBubbles(ctx, characters, offsetX, offsetY, zoom)
+
+  // Mood bubbles (below speech bubbles in priority, same position)
+  renderMoodBubbles(ctx, characters, offsetX, offsetY, zoom)
 
   // Editor overlays
   if (editor) {

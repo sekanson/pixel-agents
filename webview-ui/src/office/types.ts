@@ -163,6 +163,16 @@ export interface OfficeLayout {
   tileColors?: Array<FloorColor | null>
 }
 
+export const PetType = { CAT: 'cat', DOG: 'dog' } as const
+export type PetTypeValue = (typeof PetType)[keyof typeof PetType]
+
+/** Configuration for a pet (persisted to globalState) */
+export interface PetConfig {
+  id: string
+  name: string
+  type?: PetTypeValue
+}
+
 export interface Character {
   id: number
   name: string
@@ -215,4 +225,8 @@ export interface Character {
   matrixEffectTimer: number
   /** Per-column random seeds (16 values) for staggered rain timing */
   matrixEffectSeeds: number[]
+  /** Active mood type, or null if none showing */
+  moodType: 'happy' | 'error' | 'stressed' | null
+  /** Countdown timer for mood bubble display */
+  moodTimer: number
 }

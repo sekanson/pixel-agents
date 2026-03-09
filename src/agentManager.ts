@@ -83,6 +83,9 @@ export async function launchNewTerminal(
 		permissionSent: false,
 		hadToolsInTurn: false,
 		usage: { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, model: null },
+		lastToolStartTime: 0,
+		recentToolStarts: [],
+		errorCountInTurn: 0,
 	};
 
 	agents.set(id, agent);
@@ -209,6 +212,9 @@ export function restoreAgents(
 			permissionSent: false,
 			hadToolsInTurn: false,
 			usage: { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, model: null },
+			lastToolStartTime: 0,
+			recentToolStarts: [],
+			errorCountInTurn: 0,
 		};
 
 		agents.set(p.id, agent);

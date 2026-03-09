@@ -12,9 +12,11 @@ import {
 	sendLayout,
 	getProjectDirPath,
 } from './agentManager.js';
-import { ensureProjectScan } from './fileWatcher.js';
+import { ensureProjectScan, setAchievementHooks } from './fileWatcher.js';
 import { loadFurnitureAssets, sendAssetsToWebview, loadFloorTiles, sendFloorTilesToWebview, loadWallTiles, sendWallTilesToWebview, loadCharacterSprites, sendCharacterSpritesToWebview, loadDefaultLayout } from './assetLoader.js';
-import { WORKSPACE_KEY_AGENT_SEATS, WORKSPACE_KEY_AGENT_NAMES, GLOBAL_KEY_SOUND_ENABLED, GLOBAL_KEY_ZOOM } from './constants.js';
+import { WORKSPACE_KEY_AGENT_SEATS, WORKSPACE_KEY_AGENT_NAMES, GLOBAL_KEY_SOUND_ENABLED, GLOBAL_KEY_ZOOM, GLOBAL_KEY_PETS_ENABLED, GLOBAL_KEY_PET_DATA } from './constants.js';
+import { AchievementManager, ACHIEVEMENTS } from './achievementManager.js';
+import type { AchievementHooks } from './transcriptParser.js';
 import { writeLayoutToFile, readLayoutFromFile, watchLayoutFile } from './layoutPersistence.js';
 import type { LayoutWatcher } from './layoutPersistence.js';
 
@@ -43,8 +45,47 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
 	layoutWatcher: LayoutWatcher | null = null;
 
 	private terminalHandlersRegistered = false;
+	achievementManager: AchievementManager;
+	achievementHooks: AchievementHooks;
+	private lastTokensByAgent = new Map<number, number>();
 
-	constructor(private readonly context: vscode.ExtensionContext) {}
+	constructor(private readonly context: vscode.ExtensionContext) {
+		this.achievementManager = new AchievementManager(context);
+		this.achievementHooks = this.createAchievementHooks();
+		setAchievementHooks(this.achievementHooks);
+	}
+
+	private notifyAchievement(id: string | null): void {
+		if (!id) {return;}
+		const def = ACHIEVEMENTS.find(a => a.id === id);
+		if (!def) {return;}
+		this.webview?.postMessage({ type: 'achievementUnlocked', achievement: { id: def.id, name: def.name, description: def.description } });
+	}
+
+	private createAchievementHooks(): AchievementHooks {
+		return {
+			onError: () => {
+				this.notifyAchievement(this.achievementManager.increment('bug_squasher'));
+			},
+			onTurnComplete: () => {
+				this.notifyAchievement(this.achievementManager.increment('marathon'));
+			},
+			onToolUse: (toolName: string, input: Record<string, unknown>) => {
+				this.notifyAchievement(this.achievementManager.checkNightOwl());
+				if ((toolName === 'Edit' || toolName === 'Write') && typeof input.file_path === 'string') {
+					this.notifyAchievement(this.achievementManager.trackFileEdit(input.file_path));
+				}
+			},
+			onTokens: (agentId: number, total: number) => {
+				const last = this.lastTokensByAgent.get(agentId) || 0;
+				const delta = total - last;
+				if (delta > 0) {
+					this.lastTokensByAgent.set(agentId, total);
+					this.notifyAchievement(this.achievementManager.increment('token_millionaire', delta));
+				}
+			},
+		};
+	}
 
 	private get extensionUri(): vscode.Uri {
 		return this.context.extensionUri;
@@ -65,7 +106,7 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
 
 		webviewView.webview.onDidReceiveMessage(async (message) => {
 			if (message.type === 'openClaude') {
-				launchNewTerminal(
+				await launchNewTerminal(
 					this.nextAgentId, this.nextTerminalIndex,
 					this.agents, this.activeAgentId, this.knownJsonlFiles,
 					this.fileWatchers, this.pollingTimers, this.waitingTimers, this.permissionTimers,
@@ -73,6 +114,9 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
 					this.webview, this.persistAgents,
 					this.context,
 				);
+				// Achievement tracking
+				this.notifyAchievement(this.achievementManager.increment('first_agent'));
+				this.notifyAchievement(this.achievementManager.setMax('team_player', this.agents.size));
 			} else if (message.type === 'focusAgent') {
 				const agent = this.agents.get(message.id);
 				if (agent) {
@@ -93,9 +137,22 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
 				this.context.workspaceState.update(WORKSPACE_KEY_AGENT_NAMES, message.names);
 			} else if (message.type === 'saveLayout') {
 				this.layoutWatcher?.markOwnWrite();
-				writeLayoutToFile(message.layout as Record<string, unknown>);
+				const layout = message.layout as Record<string, unknown>;
+				writeLayoutToFile(layout);
+				// Achievement: decorator — count furniture items
+				const furniture = (layout as { furniture?: unknown[] }).furniture;
+				if (Array.isArray(furniture)) {
+					this.notifyAchievement(this.achievementManager.setMax('decorator', furniture.length));
+				}
 			} else if (message.type === 'setSoundEnabled') {
 				this.context.globalState.update(GLOBAL_KEY_SOUND_ENABLED, message.enabled);
+			} else if (message.type === 'requestAchievements') {
+				const achievements = this.achievementManager.getAllProgress();
+				this.webview?.postMessage({ type: 'achievementsLoaded', achievements });
+			} else if (message.type === 'setPetsEnabled') {
+				this.context.globalState.update(GLOBAL_KEY_PETS_ENABLED, message.enabled);
+			} else if (message.type === 'savePetData') {
+				this.context.globalState.update(GLOBAL_KEY_PET_DATA, message.petData);
 			} else if (message.type === 'saveZoom') {
 				this.context.globalState.update(GLOBAL_KEY_ZOOM, message.zoom);
 			} else if (message.type === 'webviewReady') {
@@ -110,7 +167,10 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
 				// Send persisted settings to webview
 				const soundEnabled = this.context.globalState.get<boolean>(GLOBAL_KEY_SOUND_ENABLED, true);
 				const savedZoom = this.context.globalState.get<number>(GLOBAL_KEY_ZOOM);
-				this.webview?.postMessage({ type: 'settingsLoaded', soundEnabled, zoom: savedZoom ?? null });
+				const petsEnabled = this.context.globalState.get<boolean>(GLOBAL_KEY_PETS_ENABLED, true);
+				const petData = this.context.globalState.get<unknown[]>(GLOBAL_KEY_PET_DATA, []);
+				const hasProject = getProjectDirPath() !== null;
+				this.webview?.postMessage({ type: 'settingsLoaded', soundEnabled, zoom: savedZoom ?? null, petsEnabled, petData, hasProject });
 
 				// Ensure project scan runs even with no restored agents (to adopt external terminals)
 				const projectDir = getProjectDirPath();

@@ -99,6 +99,28 @@ export const NOTIFICATION_NOTE_2_START_SEC = 0.1
 export const NOTIFICATION_NOTE_DURATION_SEC = 0.18
 export const NOTIFICATION_VOLUME = 0.14
 
+// ── Achievements ────────────────────────────────────────────
+export const ACHIEVEMENT_POPUP_DURATION_MS = 4000
+
+// ── Mood Bubbles ────────────────────────────────────────────
+export const MOOD_BUBBLE_DURATION_SEC = 3.0
+export const MOOD_BUBBLE_FADE_DURATION_SEC = 0.5
+
+// ── Office Pets ─────────────────────────────────────────────
+export const PET_WALK_SPEED_PX_PER_SEC = 28
+export const PET_WANDER_PAUSE_MIN_SEC = 3.0
+export const PET_WANDER_PAUSE_MAX_SEC = 10.0
+export const PET_SLEEP_DURATION_MIN_SEC = 15.0
+export const PET_SLEEP_DURATION_MAX_SEC = 40.0
+export const PET_SIT_DURATION_MIN_SEC = 8.0
+export const PET_SIT_DURATION_MAX_SEC = 20.0
+export const PET_SPRITE_W = 17
+export const PET_SPRITE_H = 12
+export const PET_WALK_FRAME_DURATION_SEC = 0.2
+export const PET_Z_SORT_OFFSET = 0.3
+export const MAX_PETS = 5
+export const PET_NAME_MAX_LENGTH = 12
+
 // ── Game Logic ───────────────────────────────────────────────
 export const MAX_DELTA_TIME_SEC = 0.1
 export const WAITING_BUBBLE_DURATION_SEC = 2.0

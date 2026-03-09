@@ -12,9 +12,13 @@ import {
   CHARACTER_SITTING_OFFSET_PX,
   CHARACTER_HIT_HALF_WIDTH,
   CHARACTER_HIT_HEIGHT,
+  MOOD_BUBBLE_DURATION_SEC,
 } from '../../constants.js'
 import type { Character, Seat, FurnitureInstance, TileType as TileTypeVal, OfficeLayout, PlacedFurniture } from '../types.js'
 import { createCharacter, updateCharacter } from './characters.js'
+import { createPet, updatePet, updatePetConfig } from './pets.js'
+import type { Pet } from './pets.js'
+import type { PetConfig } from '../types.js'
 import { matrixEffectSeeds } from './matrixEffect.js'
 import { isWalkable, getWalkableTiles, findPath } from '../layout/tileMap.js'
 import {
@@ -43,6 +47,8 @@ export class OfficeState {
   /** Reverse lookup: sub-agent character ID → parent info */
   subagentMeta: Map<number, { parentAgentId: number; parentToolId: string }> = new Map()
   private nextSubagentId = -1
+  pets: Pet[] = []
+  petsEnabled = true
 
   constructor(layout?: OfficeLayout) {
     this.layout = layout || createDefaultLayout()
@@ -598,6 +604,18 @@ export class OfficeState {
     }
   }
 
+  /** Show a mood bubble on a character (lower priority than permission/waiting) */
+  showMoodBubble(id: number, mood: 'happy' | 'error' | 'stressed'): void {
+    const ch = this.characters.get(id)
+    if (!ch) return
+    // Don't show mood if permission or waiting bubble is active
+    if (ch.bubbleType === 'permission' || ch.bubbleType === 'waiting') {
+      return
+    }
+    ch.moodType = mood
+    ch.moodTimer = MOOD_BUBBLE_DURATION_SEC
+  }
+
   /** Dismiss bubble on click — permission: instant, waiting: quick fade */
   dismissBubble(id: number): void {
     const ch = this.characters.get(id)
@@ -644,15 +662,69 @@ export class OfficeState {
           ch.bubbleTimer = 0
         }
       }
+
+      // Tick mood timer (mood is lower priority than bubbles)
+      if (ch.moodType) {
+        // Clear mood when a higher-priority bubble appears
+        if (ch.bubbleType === 'permission' || ch.bubbleType === 'waiting') {
+          ch.moodType = null
+          ch.moodTimer = 0
+        } else {
+          ch.moodTimer -= dt
+          if (ch.moodTimer <= 0) {
+            ch.moodType = null
+            ch.moodTimer = 0
+          }
+        }
+      }
     }
     // Remove characters that finished despawn
     for (const id of toDelete) {
       this.characters.delete(id)
     }
+
+    // Update pets
+    if (this.petsEnabled) {
+      for (const pet of this.pets) {
+        updatePet(pet, dt, this.walkableTiles, this.tileMap, this.blockedTiles, this.characters)
+      }
+    }
   }
 
   getCharacters(): Character[] {
     return Array.from(this.characters.values())
+  }
+
+  setPetsEnabled(enabled: boolean): void {
+    this.petsEnabled = enabled
+    if (!enabled) {
+      this.pets = []
+    }
+  }
+
+  /** Reconcile pets with a list of PetConfig entries */
+  syncPets(configs: PetConfig[]): void {
+    if (!this.petsEnabled) return
+    // Build map of existing pets by configId
+    const existing = new Map<string, Pet>()
+    for (const pet of this.pets) {
+      existing.set(pet.configId, pet)
+    }
+    const newPets: Pet[] = []
+    for (const cfg of configs) {
+      const ex = existing.get(cfg.id)
+      if (ex) {
+        updatePetConfig(ex, cfg.name, cfg.type ?? 'cat')
+        newPets.push(ex)
+      } else {
+        // Create new pet at random walkable tile
+        if (this.walkableTiles.length > 0) {
+          const spawn = this.walkableTiles[Math.floor(Math.random() * this.walkableTiles.length)]
+          newPets.push(createPet(spawn.col, spawn.row, cfg.id, cfg.name, cfg.type ?? 'cat'))
+        }
+      }
+    }
+    this.pets = newPets
   }
 
   /** Get character at pixel position (for hit testing). Returns id or null. */

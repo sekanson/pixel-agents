@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import type { OfficeState } from '../office/engine/officeState.js'
-import type { OfficeLayout, ToolActivity, AgentUsageData } from '../office/types.js'
+import type { OfficeLayout, ToolActivity, AgentUsageData, PetConfig } from '../office/types.js'
 import { extractToolName } from '../office/toolUtils.js'
 import { migrateLayoutColors } from '../office/layout/layoutSerializer.js'
 import { buildDynamicCatalog } from '../office/layout/furnitureCatalog.js'
@@ -9,6 +9,7 @@ import { setWallSprites } from '../office/wallTiles.js'
 import { setCharacterTemplates } from '../office/sprites/spriteData.js'
 import { vscode } from '../vscodeApi.js'
 import { playDoneSound, setSoundEnabled } from '../notificationSound.js'
+import type { AchievementNotification } from '../components/AchievementPopup.js'
 
 export interface SubagentCharacter {
   id: number
@@ -35,6 +36,15 @@ export interface FurnitureAsset {
   backgroundTiles?: number
 }
 
+export interface AchievementData {
+  id: string
+  name: string
+  description: string
+  target: number
+  unlocked: boolean
+  current: number
+}
+
 export interface ExtensionMessageState {
   agents: number[]
   selectedAgent: number | null
@@ -45,6 +55,15 @@ export interface ExtensionMessageState {
   agentUsage: Record<number, AgentUsageData>
   layoutReady: boolean
   loadedAssets?: { catalog: FurnitureAsset[]; sprites: Record<string, string[][]> }
+  achievementPopup: AchievementNotification | null
+  setAchievementPopup: (v: AchievementNotification | null) => void
+  achievementGallery: AchievementData[] | null
+  setAchievementGallery: (v: AchievementData[] | null) => void
+  petsEnabled: boolean
+  setPetsEnabled: (v: boolean) => void
+  petData: PetConfig[]
+  setPetData: (v: PetConfig[]) => void
+  hasProject: boolean
 }
 
 function saveAgentSeats(os: OfficeState): void {
@@ -83,6 +102,11 @@ export function useExtensionMessages(
   const [agentUsage, setAgentUsage] = useState<Record<number, AgentUsageData>>({})
   const [layoutReady, setLayoutReady] = useState(false)
   const [loadedAssets, setLoadedAssets] = useState<{ catalog: FurnitureAsset[]; sprites: Record<string, string[][]> } | undefined>()
+  const [achievementPopup, setAchievementPopup] = useState<AchievementNotification | null>(null)
+  const [achievementGallery, setAchievementGallery] = useState<AchievementData[] | null>(null)
+  const [petsEnabled, setPetsEnabled] = useState(true)
+  const [petData, setPetData] = useState<PetConfig[]>([])
+  const [hasProject, setHasProject] = useState(true)
 
   // Track whether initial layout has been loaded (ref to avoid re-render)
   const layoutReadyRef = useRef(false)
@@ -359,6 +383,10 @@ export function useExtensionMessages(
         // Remove sub-agent character
         os.removeSubagent(id, parentToolId)
         setSubagentCharacters((prev) => prev.filter((s) => !(s.parentAgentId === id && s.parentToolId === parentToolId)))
+      } else if (msg.type === 'agentMoodEvent') {
+        const id = msg.id as number
+        const mood = msg.mood as 'happy' | 'error' | 'stressed'
+        os.showMoodBubble(id, mood)
       } else if (msg.type === 'agentUsageUpdate') {
         const id = msg.id as number
         const usage = msg.usage as AgentUsageData
@@ -375,11 +403,37 @@ export function useExtensionMessages(
         const sprites = msg.sprites as string[][][]
         console.log(`[Webview] Received ${sprites.length} wall tile sprites`)
         setWallSprites(sprites)
+      } else if (msg.type === 'achievementUnlocked') {
+        const achievement = msg.achievement as AchievementNotification
+        setAchievementPopup(achievement)
+      } else if (msg.type === 'achievementsLoaded') {
+        const achievements = msg.achievements as AchievementData[]
+        setAchievementGallery(achievements)
       } else if (msg.type === 'settingsLoaded') {
+        if (typeof msg.hasProject === 'boolean') {
+          setHasProject(msg.hasProject)
+        }
         const soundOn = msg.soundEnabled as boolean
         setSoundEnabled(soundOn)
         if (typeof msg.zoom === 'number') {
           onZoomRestored?.(msg.zoom)
+        }
+        if (typeof msg.petsEnabled === 'boolean') {
+          setPetsEnabled(msg.petsEnabled)
+          os.setPetsEnabled(msg.petsEnabled)
+        }
+        const loadedPetData = (msg.petData ?? []) as PetConfig[]
+        if (msg.petsEnabled !== false) {
+          // If enabled with no saved data, create a default pet
+          if (loadedPetData.length === 0) {
+            const defaultPet: PetConfig = { id: crypto.randomUUID(), name: 'Cat', type: 'cat' }
+            loadedPetData.push(defaultPet)
+            vscode.postMessage({ type: 'savePetData', petData: loadedPetData })
+          }
+          setPetData(loadedPetData)
+          os.syncPets(loadedPetData)
+        } else {
+          setPetData(loadedPetData)
         }
       } else if (msg.type === 'furnitureAssetsLoaded') {
         try {
@@ -399,5 +453,5 @@ export function useExtensionMessages(
     return () => window.removeEventListener('message', handler)
   }, [getOfficeState])
 
-  return { agents, selectedAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, agentUsage, layoutReady, loadedAssets }
+  return { agents, selectedAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, agentUsage, layoutReady, loadedAssets, achievementPopup, setAchievementPopup, achievementGallery, setAchievementGallery, petsEnabled, setPetsEnabled, petData, setPetData, hasProject }
 }

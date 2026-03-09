@@ -267,6 +267,7 @@ export function OfficeCanvas({ officeState, onClick, isEditMode, isSeatMode, edi
           officeState.getLayout().tileColors,
           officeState.getLayout().cols,
           officeState.getLayout().rows,
+          officeState.petsEnabled ? officeState.pets : undefined,
         )
         offsetRef.current = { x: offsetX, y: offsetY }
 

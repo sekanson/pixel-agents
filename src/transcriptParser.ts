@@ -13,6 +13,9 @@ import {
 	TEXT_IDLE_DELAY_MS,
 	BASH_COMMAND_DISPLAY_MAX_LENGTH,
 	TASK_DESCRIPTION_DISPLAY_MAX_LENGTH,
+	MOOD_STRESSED_TOOL_DURATION_MS,
+	MOOD_STRESSED_RAPID_THRESHOLD_MS,
+	MOOD_STRESSED_RAPID_COUNT,
 } from './constants.js';
 
 export const PERMISSION_EXEMPT_TOOLS = new Set(['Task', 'AskUserQuestion']);
@@ -42,6 +45,13 @@ export function formatToolStatus(toolName: string, input: Record<string, unknown
 	}
 }
 
+export interface AchievementHooks {
+	onError: () => void;
+	onTurnComplete: () => void;
+	onToolUse: (toolName: string, input: Record<string, unknown>) => void;
+	onTokens: (agentId: number, total: number) => void;
+}
+
 export function processTranscriptLine(
 	agentId: number,
 	line: string,
@@ -49,6 +59,7 @@ export function processTranscriptLine(
 	waitingTimers: Map<number, ReturnType<typeof setTimeout>>,
 	permissionTimers: Map<number, ReturnType<typeof setTimeout>>,
 	webview: vscode.Webview | undefined,
+	achievementHooks?: AchievementHooks,
 ): void {
 	const agent = agents.get(agentId);
 	if (!agent) {return;}
@@ -71,6 +82,7 @@ export function processTranscriptLine(
 				agent.usage.model = model;
 			}
 			const u = agent.usage;
+			const totalTokens = u.inputTokens + u.outputTokens + u.cacheCreationTokens + u.cacheReadTokens;
 			webview?.postMessage({
 				type: 'agentUsageUpdate',
 				id: agentId,
@@ -79,10 +91,11 @@ export function processTranscriptLine(
 					outputTokens: u.outputTokens,
 					cacheCreationTokens: u.cacheCreationTokens,
 					cacheReadTokens: u.cacheReadTokens,
-					totalTokens: u.inputTokens + u.outputTokens + u.cacheCreationTokens + u.cacheReadTokens,
+					totalTokens,
 					model: u.model,
 				},
 			});
+			achievementHooks?.onTokens(agentId, totalTokens);
 
 			const blocks = record.message.content as Array<{
 				type: string; id?: string; name?: string; input?: Record<string, unknown>;
@@ -94,6 +107,7 @@ export function processTranscriptLine(
 				agent.hadToolsInTurn = true;
 				webview?.postMessage({ type: 'agentStatus', id: agentId, status: 'active' });
 				let hasNonExemptTool = false;
+				const now = Date.now();
 				for (const block of blocks) {
 					if (block.type === 'tool_use' && block.id) {
 						const toolName = block.name || '';
@@ -111,8 +125,21 @@ export function processTranscriptLine(
 							toolId: block.id,
 							status,
 						});
+						achievementHooks?.onToolUse(toolName, block.input || {});
 					}
 				}
+				// Stressed detection: rapid tool starts
+				agent.recentToolStarts.push(now);
+				agent.recentToolStarts = agent.recentToolStarts.filter(t => now - t < MOOD_STRESSED_RAPID_THRESHOLD_MS);
+				if (agent.recentToolStarts.length >= MOOD_STRESSED_RAPID_COUNT) {
+					webview?.postMessage({ type: 'agentMoodEvent', id: agentId, mood: 'stressed' });
+					agent.recentToolStarts = [];
+				}
+				// Stressed detection: long-running tool
+				if (agent.lastToolStartTime > 0 && (now - agent.lastToolStartTime) > MOOD_STRESSED_TOOL_DURATION_MS) {
+					webview?.postMessage({ type: 'agentMoodEvent', id: agentId, mood: 'stressed' });
+				}
+				agent.lastToolStartTime = now;
 				if (hasNonExemptTool) {
 					startPermissionTimer(agentId, agents, permissionTimers, PERMISSION_EXEMPT_TOOLS, webview);
 				}
@@ -128,10 +155,16 @@ export function processTranscriptLine(
 		} else if (record.type === 'user') {
 			const content = record.message?.content;
 			if (Array.isArray(content)) {
-				const blocks = content as Array<{ type: string; tool_use_id?: string }>;
+				const blocks = content as Array<{ type: string; tool_use_id?: string; is_error?: boolean }>;
 				const hasToolResult = blocks.some(b => b.type === 'tool_result');
 				if (hasToolResult) {
 					for (const block of blocks) {
+						// Error mood detection
+						if (block.type === 'tool_result' && block.is_error) {
+							agent.errorCountInTurn++;
+							webview?.postMessage({ type: 'agentMoodEvent', id: agentId, mood: 'error' });
+							achievementHooks?.onError();
+						}
 						if (block.type === 'tool_result' && block.tool_use_id) {
 							console.log(`[Pixel Agents] Agent ${agentId} tool done: ${block.tool_use_id}`);
 							const completedToolId = block.tool_use_id;
@@ -171,12 +204,16 @@ export function processTranscriptLine(
 					cancelWaitingTimer(agentId, waitingTimers);
 					clearAgentActivity(agent, agentId, permissionTimers, webview);
 					agent.hadToolsInTurn = false;
+					agent.errorCountInTurn = 0;
+					agent.recentToolStarts = [];
 				}
 			} else if (typeof content === 'string' && content.trim()) {
 				// New user text prompt — new turn starting
 				cancelWaitingTimer(agentId, waitingTimers);
 				clearAgentActivity(agent, agentId, permissionTimers, webview);
 				agent.hadToolsInTurn = false;
+				agent.errorCountInTurn = 0;
+				agent.recentToolStarts = [];
 			}
 		} else if (record.type === 'system' && record.subtype === 'turn_duration') {
 			cancelWaitingTimer(agentId, waitingTimers);
@@ -192,9 +229,18 @@ export function processTranscriptLine(
 				webview?.postMessage({ type: 'agentToolsClear', id: agentId });
 			}
 
+			// Happy mood: only for tool-using turns without errors
+			if (agent.hadToolsInTurn && agent.errorCountInTurn === 0) {
+				webview?.postMessage({ type: 'agentMoodEvent', id: agentId, mood: 'happy' });
+			}
+			achievementHooks?.onTurnComplete();
+
 			agent.isWaiting = true;
 			agent.permissionSent = false;
 			agent.hadToolsInTurn = false;
+			agent.lastToolStartTime = 0;
+			agent.recentToolStarts = [];
+			agent.errorCountInTurn = 0;
 			webview?.postMessage({
 				type: 'agentStatus',
 				id: agentId,

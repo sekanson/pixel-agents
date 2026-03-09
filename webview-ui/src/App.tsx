@@ -5,6 +5,7 @@ import { ToolOverlay } from './office/components/ToolOverlay.js'
 import { EditorToolbar } from './office/editor/EditorToolbar.js'
 import { EditorState } from './office/editor/editorState.js'
 import { EditTool } from './office/types.js'
+import type { PetConfig } from './office/types.js'
 import { isRotatable } from './office/layout/furnitureCatalog.js'
 import { vscode } from './vscodeApi.js'
 import { useExtensionMessages } from './hooks/useExtensionMessages.js'
@@ -17,6 +18,8 @@ import { DebugView } from './components/DebugView.js'
 import { TaskPanel } from './components/TaskPanel.js'
 import { UsagePanel } from './components/UsagePanel.js'
 import { PixelTextEditor } from './office/editor/PixelTextEditor.js'
+import { AchievementPopup } from './components/AchievementPopup.js'
+import { AchievementGallery } from './components/AchievementGallery.js'
 
 // Game state lives outside React — updated imperatively by message handlers
 const officeStateRef = { current: null as OfficeState | null }
@@ -124,7 +127,7 @@ function App() {
 
   const isEditDirty = useCallback(() => editor.isEditMode && editor.isDirty, [editor.isEditMode, editor.isDirty])
 
-  const { agents, selectedAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, agentUsage, layoutReady, loadedAssets } = useExtensionMessages(getOfficeState, editor.setLastSavedLayout, isEditDirty, editor.restoreZoom)
+  const { agents, selectedAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, agentUsage, layoutReady, loadedAssets, achievementPopup, setAchievementPopup, achievementGallery, setAchievementGallery, petsEnabled, setPetsEnabled, petData, setPetData, hasProject } = useExtensionMessages(getOfficeState, editor.setLastSavedLayout, isEditDirty, editor.restoreZoom)
 
   const [isDebugMode, setIsDebugMode] = useState(false)
   const [isSeatMode, setIsSeatMode] = useState(false)
@@ -135,6 +138,32 @@ function App() {
   const handleToggleUsagePanel = useCallback(() => setIsUsagePanelOpen((prev) => !prev), [])
 
   const handleToggleDebugMode = useCallback(() => setIsDebugMode((prev) => !prev), [])
+  const handleOpenAchievements = useCallback(() => {
+    vscode.postMessage({ type: 'requestAchievements' })
+  }, [])
+  const handleTogglePets = useCallback(() => {
+    const next = !petsEnabled
+    setPetsEnabled(next)
+    const os = getOfficeState()
+    os.setPetsEnabled(next)
+    vscode.postMessage({ type: 'setPetsEnabled', enabled: next })
+    if (next) {
+      // When re-enabling, ensure at least one default pet
+      let data = petData
+      if (data.length === 0) {
+        data = [{ id: crypto.randomUUID(), name: 'Cat', type: 'cat' as const }]
+        setPetData(data)
+        vscode.postMessage({ type: 'savePetData', petData: data })
+      }
+      os.syncPets(data)
+    }
+  }, [petsEnabled, setPetsEnabled, petData, setPetData])
+
+  const handleUpdatePetData = useCallback((data: PetConfig[]) => {
+    setPetData(data)
+    getOfficeState().syncPets(data)
+    vscode.postMessage({ type: 'savePetData', petData: data })
+  }, [setPetData])
   const handleToggleSeatMode = useCallback(() => {
     setIsSeatMode((prev) => {
       const next = !prev
@@ -196,6 +225,19 @@ function App() {
     return false
   })()
 
+  if (!hasProject) {
+    return (
+      <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--pixel-bg)', padding: '16px' }}>
+        <div style={{ fontSize: 'clamp(18px, 4vw, 26px)', color: 'var(--pixel-text)', marginBottom: 8, textAlign: 'center' }}>
+          Open a project folder to get started
+        </div>
+        <div style={{ fontSize: 'clamp(14px, 3vw, 20px)', color: 'var(--pixel-text-dim)', textAlign: 'center' }}>
+          Pixel Agents needs a workspace to create and track AI agents.
+        </div>
+      </div>
+    )
+  }
+
   if (!layoutReady) {
     return (
       <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--vscode-foreground)' }}>
@@ -255,6 +297,11 @@ function App() {
         onToggleSeatMode={handleToggleSeatMode}
         isDebugMode={isDebugMode}
         onToggleDebugMode={handleToggleDebugMode}
+        onOpenAchievements={handleOpenAchievements}
+        petsEnabled={petsEnabled}
+        onTogglePets={handleTogglePets}
+        petData={petData}
+        onUpdatePetData={handleUpdatePetData}
       />
 
       {editor.isEditMode && editor.isDirty && (
@@ -488,6 +535,20 @@ function App() {
           agentStatuses={agentStatuses}
           subagentCharacters={subagentCharacters}
           officeState={officeState}
+        />
+      )}
+
+      {/* Achievement popup */}
+      <AchievementPopup
+        achievement={achievementPopup}
+        onDone={() => setAchievementPopup(null)}
+      />
+
+      {/* Achievement gallery */}
+      {achievementGallery && (
+        <AchievementGallery
+          achievements={achievementGallery}
+          onClose={() => setAchievementGallery(null)}
         />
       )}
     </div>

@@ -26,6 +26,9 @@ export interface AgentState {
 	permissionSent: boolean;
 	hadToolsInTurn: boolean;
 	usage: UsageData;
+	lastToolStartTime: number;
+	recentToolStarts: number[];
+	errorCountInTurn: number;
 }
 
 export interface PersistedAgent {

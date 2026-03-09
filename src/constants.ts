@@ -8,6 +8,9 @@ export const PERMISSION_TIMEOUT_FAST_MS = 5000;
 export const PERMISSION_TIMEOUT_NETWORK_MS = 15000;
 export const PERMISSION_TIMEOUT_SLOW_MS = 20000;
 export const TEXT_IDLE_DELAY_MS = 5000;
+export const MOOD_STRESSED_TOOL_DURATION_MS = 30000;
+export const MOOD_STRESSED_RAPID_THRESHOLD_MS = 2000;
+export const MOOD_STRESSED_RAPID_COUNT = 4;
 
 export const TOOL_TIMEOUT_CATEGORY: Record<string, 'fast' | 'network' | 'slow'> = {
 	Read: 'fast', Write: 'fast', Edit: 'fast', Glob: 'fast', Grep: 'fast',
@@ -42,6 +45,9 @@ export const LAYOUT_FILE_POLL_INTERVAL_MS = 2000;
 // ── Settings Persistence ────────────────────────────────────
 export const GLOBAL_KEY_SOUND_ENABLED = 'pixel-agent.soundEnabled';
 export const GLOBAL_KEY_ZOOM = 'pixel-agent.zoomLevel';
+export const GLOBAL_KEY_ACHIEVEMENTS = 'pixel-agent.achievements';
+export const GLOBAL_KEY_PETS_ENABLED = 'pixel-agent.petsEnabled';
+export const GLOBAL_KEY_PET_DATA = 'pixel-agent.petData';
 
 // ── VS Code Identifiers ─────────────────────────────────────
 export const VIEW_ID = 'pixel-agent.panelView';

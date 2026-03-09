@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { SettingsModal } from './SettingsModal.js'
+import type { PetConfig } from '../office/types.js'
 
 interface BottomToolbarProps {
   isEditMode: boolean
@@ -9,6 +10,11 @@ interface BottomToolbarProps {
   onToggleSeatMode: () => void
   isDebugMode: boolean
   onToggleDebugMode: () => void
+  onOpenAchievements: () => void
+  petsEnabled: boolean
+  onTogglePets: () => void
+  petData: PetConfig[]
+  onUpdatePetData: (data: PetConfig[]) => void
 }
 
 const panelStyle: React.CSSProperties = {
@@ -51,6 +57,11 @@ export function BottomToolbar({
   onToggleSeatMode,
   isDebugMode,
   onToggleDebugMode,
+  onOpenAchievements,
+  petsEnabled,
+  onTogglePets,
+  petData,
+  onUpdatePetData,
 }: BottomToolbarProps) {
   const [hovered, setHovered] = useState<string | null>(null)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
@@ -128,6 +139,11 @@ export function BottomToolbar({
           onClose={() => setIsSettingsOpen(false)}
           isDebugMode={isDebugMode}
           onToggleDebugMode={onToggleDebugMode}
+          onOpenAchievements={onOpenAchievements}
+          petsEnabled={petsEnabled}
+          onTogglePets={onTogglePets}
+          petData={petData}
+          onUpdatePetData={onUpdatePetData}
         />
       </div>
     </div>

@@ -80,6 +80,8 @@ export function createCharacter(
     matrixEffect: null,
     matrixEffectTimer: 0,
     matrixEffectSeeds: [],
+    moodType: null,
+    moodTimer: 0,
   }
 }
 
