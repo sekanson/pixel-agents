@@ -1,7 +1,7 @@
 import { Direction, TILE_SIZE } from '../types.js'
 import type { SpriteData, TileType as TileTypeVal, Character, PetTypeValue } from '../types.js'
 import { findPath } from '../layout/tileMap.js'
-import { CAT_SPRITES } from '../sprites/petSprites.js'
+import { CAT_SPRITES, getHueShiftedPetSprite } from '../sprites/petSprites.js'
 import type { PetSprites } from '../sprites/petSprites.js'
 import { DOG_SPRITES } from '../sprites/dogSprites.js'
 import {
@@ -28,6 +28,8 @@ export interface Pet {
   id: number
   configId: string
   name: string
+  /** Hue shift in degrees (0 = no shift) */
+  hue: number
   state: PetStateType
   dir: Direction
   x: number
@@ -48,11 +50,12 @@ function spritesForType(type: PetTypeValue | undefined): PetSprites {
   return type === 'dog' ? DOG_SPRITES : CAT_SPRITES
 }
 
-export function createPet(col: number, row: number, configId: string, name: string, type?: PetTypeValue): Pet {
+export function createPet(col: number, row: number, configId: string, name: string, type?: PetTypeValue, hue?: number): Pet {
   return {
     id: nextPetId++,
     configId,
     name,
+    hue: hue ?? 0,
     state: PetState.IDLE,
     dir: Direction.DOWN,
     x: col * TILE_SIZE + TILE_SIZE / 2,
@@ -68,9 +71,10 @@ export function createPet(col: number, row: number, configId: string, name: stri
   }
 }
 
-/** Update a pet's name and/or type (for live editing in settings) */
-export function updatePetConfig(pet: Pet, name: string, type?: PetTypeValue): void {
+/** Update a pet's name, type, and/or hue (for live editing in settings) */
+export function updatePetConfig(pet: Pet, name: string, type?: PetTypeValue, hue?: number): void {
   pet.name = name
+  pet.hue = hue ?? 0
   const newSprites = spritesForType(type)
   if (pet.sprites !== newSprites) {
     pet.sprites = newSprites
@@ -254,16 +258,35 @@ export function updatePet(
 }
 
 export function getPetSprite(pet: Pet): SpriteData {
-  if (pet.state === 'sleep') return pet.sprites.sleep[pet.frame % pet.sprites.sleep.length]
-  if (pet.state === 'scared') return pet.sprites.scared[pet.frame % pet.sprites.scared.length]
-  if (pet.state === 'walk') {
+  let sprite: SpriteData
+  let cacheKey: string
+  if (pet.state === 'sleep') {
+    const idx = pet.frame % pet.sprites.sleep.length
+    sprite = pet.sprites.sleep[idx]
+    cacheKey = `${pet.configId}:sleep:${idx}`
+  } else if (pet.state === 'scared') {
+    const idx = pet.frame % pet.sprites.scared.length
+    sprite = pet.sprites.scared[idx]
+    cacheKey = `${pet.configId}:scared:${idx}`
+  } else if (pet.state === 'walk') {
     // Use directional sprites if available
     const dirSprites = getDirectionalWalkSprites(pet)
-    if (dirSprites) return dirSprites[pet.frame % dirSprites.length]
-    return pet.sprites.walk[pet.frame % pet.sprites.walk.length]
+    if (dirSprites) {
+      const idx = pet.frame % dirSprites.length
+      sprite = dirSprites[idx]
+      cacheKey = `${pet.configId}:walk:${pet.dir}:${idx}`
+    } else {
+      const idx = pet.frame % pet.sprites.walk.length
+      sprite = pet.sprites.walk[idx]
+      cacheKey = `${pet.configId}:walk:${idx}`
+    }
+  } else {
+    // idle and sit use idle animation
+    const idx = pet.frame % pet.sprites.idle.length
+    sprite = pet.sprites.idle[idx]
+    cacheKey = `${pet.configId}:idle:${idx}`
   }
-  // idle and sit use idle animation
-  return pet.sprites.idle[pet.frame % pet.sprites.idle.length]
+  return getHueShiftedPetSprite(sprite, pet.hue, cacheKey)
 }
 
 function getDirectionalWalkSprites(pet: Pet): SpriteData[] | undefined {

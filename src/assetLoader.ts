@@ -184,6 +184,50 @@ export function loadDefaultLayout(assetsRoot: string): Record<string, unknown> |
   }
 }
 
+// ── Bundled level loading ────────────────────────────────────
+
+/**
+ * Load a bundled level layout from assets/level-{n}.json.
+ * Returns the parsed layout object or null if not found.
+ */
+export function loadBundledLevel(assetsRoot: string, level: number): Record<string, unknown> | null {
+  try {
+    const layoutPath = path.join(assetsRoot, 'assets', `level-${level}.json`);
+    if (!fs.existsSync(layoutPath)) {
+      console.log(`[AssetLoader] No level-${level}.json found at:`, layoutPath);
+      return null;
+    }
+    const content = fs.readFileSync(layoutPath, 'utf-8');
+    const layout = JSON.parse(content) as Record<string, unknown>;
+    console.log(`[AssetLoader] Loaded level ${level} layout (${layout.cols}x${layout.rows})`);
+    return layout;
+  } catch (err) {
+    console.error(`[AssetLoader] Error loading level ${level}: ${err instanceof Error ? err.message : err}`);
+    return null;
+  }
+}
+
+/**
+ * Scan assets/ for level-*.json files and return sorted level numbers.
+ */
+export function getAvailableLevels(assetsRoot: string): number[] {
+  try {
+    const assetsDir = path.join(assetsRoot, 'assets');
+    if (!fs.existsSync(assetsDir)) { return []; }
+    const files = fs.readdirSync(assetsDir);
+    const levels: number[] = [];
+    for (const file of files) {
+      const match = file.match(/^level-(\d+)\.json$/);
+      if (match) {
+        levels.push(parseInt(match[1], 10));
+      }
+    }
+    return levels.sort((a, b) => a - b);
+  } catch {
+    return [];
+  }
+}
+
 // ── Wall tile loading ────────────────────────────────────────
 
 export interface LoadedWallTiles {

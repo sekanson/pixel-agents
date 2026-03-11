@@ -115,6 +115,108 @@ export async function launchNewTerminal(
 	jsonlPollTimers.set(id, pollTimer);
 }
 
+export async function launchNamedTerminal(
+	name: string,
+	nextAgentIdRef: { current: number },
+	nextTerminalIndexRef: { current: number },
+	agents: Map<number, AgentState>,
+	activeAgentIdRef: { current: number | null },
+	knownJsonlFiles: Set<string>,
+	fileWatchers: Map<number, fs.FSWatcher>,
+	pollingTimers: Map<number, ReturnType<typeof setInterval>>,
+	waitingTimers: Map<number, ReturnType<typeof setTimeout>>,
+	permissionTimers: Map<number, ReturnType<typeof setTimeout>>,
+	jsonlPollTimers: Map<number, ReturnType<typeof setInterval>>,
+	projectScanTimerRef: { current: ReturnType<typeof setInterval> | null },
+	webview: vscode.Webview | undefined,
+	persistAgents: () => void,
+	context: vscode.ExtensionContext,
+): Promise<void> {
+	// Skip if an agent with this name is already running
+	for (const agent of agents.values()) {
+		if (agent.name === name) {
+			console.log(`[Pixel Agents] Agent "${name}" already running, skipping`);
+			return;
+		}
+	}
+
+	nextTerminalIndexRef.current++;
+	const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+	const terminal = vscode.window.createTerminal({
+		name,
+		cwd,
+	});
+	terminal.show();
+
+	const sessionId = crypto.randomUUID();
+	terminal.sendText(`claude --session-id ${sessionId}`);
+
+	const projectDir = getProjectDirPath(cwd);
+	if (!projectDir) {
+		console.log(`[Pixel Agents] No project dir, cannot track agent`);
+		return;
+	}
+
+	// Pre-register expected JSONL file so project scan won't treat it as a /clear file
+	const expectedFile = path.join(projectDir, `${sessionId}.jsonl`);
+	knownJsonlFiles.add(expectedFile);
+
+	// Look up persisted name data (palette, hueShift, seatId) for this name
+	const agentNames = context.workspaceState.get<Record<string, { seatId: string; palette: number; hueShift: number }>>(WORKSPACE_KEY_AGENT_NAMES, {});
+	const nameData = agentNames[name] ?? null;
+
+	// Create agent immediately (before JSONL file exists)
+	const id = nextAgentIdRef.current++;
+	const agent: AgentState = {
+		id,
+		name,
+		terminalRef: terminal,
+		projectDir,
+		jsonlFile: expectedFile,
+		fileOffset: 0,
+		lineBuffer: '',
+		activeToolIds: new Set(),
+		activeToolStatuses: new Map(),
+		activeToolNames: new Map(),
+		activeSubagentToolIds: new Map(),
+		activeSubagentToolNames: new Map(),
+		earlyCompletionToolIds: new Set(),
+		isWaiting: false,
+		permissionSent: false,
+		hadToolsInTurn: false,
+		usage: { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, model: null },
+		lastToolStartTime: 0,
+		recentToolStarts: [],
+		errorCountInTurn: 0,
+	};
+
+	agents.set(id, agent);
+	activeAgentIdRef.current = id;
+	persistAgents();
+	console.log(`[Pixel Agents] Agent ${id} (${name}): created for terminal ${terminal.name}`);
+	webview?.postMessage({ type: 'agentCreated', id, name, nameData });
+
+	ensureProjectScan(
+		projectDir, knownJsonlFiles, projectScanTimerRef, activeAgentIdRef,
+		nextAgentIdRef, agents, fileWatchers, pollingTimers, waitingTimers, permissionTimers,
+		webview, persistAgents,
+	);
+
+	// Poll for the specific JSONL file to appear
+	const pollTimer = setInterval(() => {
+		try {
+			if (fs.existsSync(agent.jsonlFile)) {
+				console.log(`[Pixel Agents] Agent ${id}: found JSONL file ${path.basename(agent.jsonlFile)}`);
+				clearInterval(pollTimer);
+				jsonlPollTimers.delete(id);
+				startFileWatching(id, agent.jsonlFile, agents, fileWatchers, pollingTimers, waitingTimers, permissionTimers, webview);
+				readNewLines(id, agents, waitingTimers, permissionTimers, webview);
+			}
+		} catch { /* file may not exist yet */ }
+	}, JSONL_POLL_INTERVAL_MS);
+	jsonlPollTimers.set(id, pollTimer);
+}
+
 export function removeAgent(
 	agentId: number,
 	agents: Map<number, AgentState>,

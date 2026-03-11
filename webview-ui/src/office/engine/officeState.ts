@@ -741,13 +741,13 @@ export class OfficeState {
     for (const cfg of configs) {
       const ex = existing.get(cfg.id)
       if (ex) {
-        updatePetConfig(ex, cfg.name, cfg.type ?? 'cat')
+        updatePetConfig(ex, cfg.name, cfg.type ?? 'cat', cfg.hue)
         newPets.push(ex)
       } else {
         // Create new pet at random walkable tile
         if (this.walkableTiles.length > 0) {
           const spawn = this.walkableTiles[Math.floor(Math.random() * this.walkableTiles.length)]
-          newPets.push(createPet(spawn.col, spawn.row, cfg.id, cfg.name, cfg.type ?? 'cat'))
+          newPets.push(createPet(spawn.col, spawn.row, cfg.id, cfg.name, cfg.type ?? 'cat', cfg.hue))
         }
       }
     }

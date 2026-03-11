@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import type { AgentState } from './types.js';
 import {
 	launchNewTerminal,
+	launchNamedTerminal,
 	removeAgent,
 	restoreAgents,
 	persistAgents,
@@ -13,7 +14,7 @@ import {
 	getProjectDirPath,
 } from './agentManager.js';
 import { ensureProjectScan, setAchievementHooks } from './fileWatcher.js';
-import { loadFurnitureAssets, sendAssetsToWebview, loadFloorTiles, sendFloorTilesToWebview, loadWallTiles, sendWallTilesToWebview, loadCharacterSprites, sendCharacterSpritesToWebview, loadDefaultLayout } from './assetLoader.js';
+import { loadFurnitureAssets, sendAssetsToWebview, loadFloorTiles, sendFloorTilesToWebview, loadWallTiles, sendWallTilesToWebview, loadCharacterSprites, sendCharacterSpritesToWebview, loadDefaultLayout, loadBundledLevel, getAvailableLevels } from './assetLoader.js';
 import { WORKSPACE_KEY_AGENT_SEATS, WORKSPACE_KEY_AGENT_NAMES, GLOBAL_KEY_SOUND_ENABLED, GLOBAL_KEY_ZOOM, GLOBAL_KEY_PETS_ENABLED, GLOBAL_KEY_PET_DATA } from './constants.js';
 import { AchievementManager, ACHIEVEMENTS } from './achievementManager.js';
 import type { AchievementHooks } from './transcriptParser.js';
@@ -40,6 +41,9 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
 
 	// Bundled default layout (loaded from assets/default-layout.json)
 	defaultLayout: Record<string, unknown> | null = null;
+
+	// Resolved assets root directory (set during webviewReady init)
+	assetsRoot: string | null = null;
 
 	// Cross-window layout sync
 	layoutWatcher: LayoutWatcher | null = null;
@@ -214,6 +218,7 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
 							}
 
 							console.log('[Extension] Using assetsRoot:', assetsRoot);
+							this.assetsRoot = assetsRoot;
 
 							// Load bundled default layout
 							this.defaultLayout = loadDefaultLayout(assetsRoot);
@@ -262,6 +267,7 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
 							const bundled = path.join(ep, 'dist', 'assets');
 							if (fs.existsSync(bundled)) {
 								const distRoot = path.join(ep, 'dist');
+								this.assetsRoot = distRoot;
 								this.defaultLayout = loadDefaultLayout(distRoot);
 								const cs = await loadCharacterSprites(distRoot);
 								if (cs && this.webview) {
@@ -302,6 +308,35 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
 				if (uri) {
 					fs.writeFileSync(uri.fsPath, JSON.stringify(layout, null, 2), 'utf-8');
 					vscode.window.showInformationMessage('Pixel Agents: Layout exported successfully.');
+				}
+			} else if (message.type === 'getAvailableLevels') {
+				if (this.assetsRoot) {
+					const levels = getAvailableLevels(this.assetsRoot);
+					this.webview?.postMessage({ type: 'availableLevels', levels });
+				} else {
+					this.webview?.postMessage({ type: 'availableLevels', levels: [] });
+				}
+			} else if (message.type === 'loadBundledLevel') {
+				if (this.assetsRoot) {
+					const layout = loadBundledLevel(this.assetsRoot, message.level);
+					if (layout) {
+						this.layoutWatcher?.markOwnWrite();
+						writeLayoutToFile(layout);
+						this.webview?.postMessage({ type: 'layoutLoaded', layout });
+					}
+				}
+			} else if (message.type === 'launchTeam') {
+				const names = message.names as string[];
+				for (const name of names) {
+					await launchNamedTerminal(
+						name,
+						this.nextAgentId, this.nextTerminalIndex,
+						this.agents, this.activeAgentId, this.knownJsonlFiles,
+						this.fileWatchers, this.pollingTimers, this.waitingTimers, this.permissionTimers,
+						this.jsonlPollTimers, this.projectScanTimer,
+						this.webview, this.persistAgents,
+						this.context,
+					);
 				}
 			} else if (message.type === 'importLayout') {
 				const uris = await vscode.window.showOpenDialog({

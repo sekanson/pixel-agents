@@ -1,4 +1,5 @@
-import type { SpriteData } from '../types.js'
+import type { SpriteData, FloorColor } from '../types.js'
+import { adjustSprite } from '../colorize.js'
 
 const _ = '' // transparent
 
@@ -410,4 +411,23 @@ export const CAT_SPRITES: PetSprites = {
   walk: [CAT_WALK_0, CAT_WALK_1, CAT_WALK_2, CAT_WALK_3, CAT_WALK_4, CAT_WALK_5, CAT_WALK_6, CAT_WALK_7],
   sleep: [CAT_SLEEP_0, CAT_SLEEP_1, CAT_SLEEP_2, CAT_SLEEP_3],
   scared: [CAT_SCARED_0, CAT_SCARED_1, CAT_SCARED_2, CAT_SCARED_3, CAT_SCARED_4, CAT_SCARED_5, CAT_SCARED_6, CAT_SCARED_7],
+}
+
+// ── Hue-shifted pet sprite cache ────────────────────────────────
+
+const hueShiftedPetCache = new Map<string, SpriteData>()
+
+/**
+ * Get a pet sprite with hue shift applied. Returns original sprite when hue is 0.
+ * Cache key combines sprite identity (type + state + frame index) and hue value.
+ */
+export function getHueShiftedPetSprite(sprite: SpriteData, hue: number, cacheKey: string): SpriteData {
+  if (hue === 0) return sprite
+  const fullKey = `${cacheKey}:${hue}`
+  const cached = hueShiftedPetCache.get(fullKey)
+  if (cached) return cached
+  const color: FloorColor = { h: hue, s: 0, b: 0, c: 0 }
+  const shifted = adjustSprite(sprite, color)
+  hueShiftedPetCache.set(fullKey, shifted)
+  return shifted
 }

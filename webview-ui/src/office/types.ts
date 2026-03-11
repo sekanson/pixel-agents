@@ -171,6 +171,8 @@ export interface PetConfig {
   id: string
   name: string
   type?: PetTypeValue
+  /** Hue shift in degrees (0-360). 0 = no shift. */
+  hue?: number
 }
 
 export interface Character {
