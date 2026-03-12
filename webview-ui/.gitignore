@@ -27,4 +27,12 @@ dist-ssr
 */assets/*
 !*/assets/characters/
 !*/assets/default-layout.json
+!*/assets/level-*.json
 !*/assets/walls.png
+!*/assets/floors.png
+!*/assets/furniture/
+*/assets/furniture/*
+!*/assets/furniture/furniture-catalog.json
+!*/assets/furniture/wall/
+*/assets/furniture/wall/*
+!*/assets/furniture/wall/XIX_LOGO.png

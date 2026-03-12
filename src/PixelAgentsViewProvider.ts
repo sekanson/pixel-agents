@@ -298,7 +298,7 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
 			} else if (message.type === 'exportLayout') {
 				const layout = readLayoutFromFile();
 				if (!layout) {
-					vscode.window.showWarningMessage('Pixel Agents: No saved layout to export.');
+					vscode.window.showWarningMessage('Mirmi Office: No saved layout to export.');
 					return;
 				}
 				const uri = await vscode.window.showSaveDialog({
@@ -307,7 +307,7 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
 				});
 				if (uri) {
 					fs.writeFileSync(uri.fsPath, JSON.stringify(layout, null, 2), 'utf-8');
-					vscode.window.showInformationMessage('Pixel Agents: Layout exported successfully.');
+					vscode.window.showInformationMessage('Mirmi Office: Layout exported successfully.');
 				}
 			} else if (message.type === 'getAvailableLevels') {
 				if (this.assetsRoot) {
@@ -348,15 +348,15 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
 					const raw = fs.readFileSync(uris[0].fsPath, 'utf-8');
 					const imported = JSON.parse(raw) as Record<string, unknown>;
 					if (imported.version !== 1 || !Array.isArray(imported.tiles)) {
-						vscode.window.showErrorMessage('Pixel Agents: Invalid layout file.');
+						vscode.window.showErrorMessage('Mirmi Office: Invalid layout file.');
 						return;
 					}
 					this.layoutWatcher?.markOwnWrite();
 					writeLayoutToFile(imported);
 					this.webview?.postMessage({ type: 'layoutLoaded', layout: imported });
-					vscode.window.showInformationMessage('Pixel Agents: Layout imported successfully.');
+					vscode.window.showInformationMessage('Mirmi Office: Layout imported successfully.');
 				} catch {
-					vscode.window.showErrorMessage('Pixel Agents: Failed to read or parse layout file.');
+					vscode.window.showErrorMessage('Mirmi Office: Failed to read or parse layout file.');
 				}
 			}
 		});
@@ -398,18 +398,18 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
 	exportDefaultLayout(): void {
 		const layout = readLayoutFromFile();
 		if (!layout) {
-			vscode.window.showWarningMessage('Pixel Agents: No saved layout found.');
+			vscode.window.showWarningMessage('Mirmi Office: No saved layout found.');
 			return;
 		}
 		const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 		if (!workspaceRoot) {
-			vscode.window.showErrorMessage('Pixel Agents: No workspace folder found.');
+			vscode.window.showErrorMessage('Mirmi Office: No workspace folder found.');
 			return;
 		}
 		const targetPath = path.join(workspaceRoot, 'webview-ui', 'public', 'assets', 'default-layout.json');
 		const json = JSON.stringify(layout, null, 2);
 		fs.writeFileSync(targetPath, json, 'utf-8');
-		vscode.window.showInformationMessage(`Pixel Agents: Default layout exported to ${targetPath}`);
+		vscode.window.showInformationMessage(`Mirmi Office: Default layout exported to ${targetPath}`);
 	}
 
 	private startLayoutWatcher(): void {

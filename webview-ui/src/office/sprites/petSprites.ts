@@ -1,5 +1,5 @@
 import type { SpriteData, FloorColor } from '../types.js'
-import { adjustSprite } from '../colorize.js'
+import { adjustSprite, colorizeSprite } from '../colorize.js'
 
 const _ = '' // transparent
 
@@ -420,14 +420,23 @@ const hueShiftedPetCache = new Map<string, SpriteData>()
 /**
  * Get a pet sprite with hue shift applied. Returns original sprite when hue is 0.
  * Cache key combines sprite identity (type + state + frame index) and hue value.
+ *
+ * For grayscale sprites (cat), uses colorize mode which tints grayscale with the
+ * chosen hue. For colored sprites (dog), uses adjust mode which rotates the hue.
  */
-export function getHueShiftedPetSprite(sprite: SpriteData, hue: number, cacheKey: string): SpriteData {
+export function getHueShiftedPetSprite(sprite: SpriteData, hue: number, cacheKey: string, useColorize?: boolean): SpriteData {
   if (hue === 0) return sprite
   const fullKey = `${cacheKey}:${hue}`
   const cached = hueShiftedPetCache.get(fullKey)
   if (cached) return cached
-  const color: FloorColor = { h: hue, s: 0, b: 0, c: 0 }
-  const shifted = adjustSprite(sprite, color)
+  let shifted: SpriteData
+  if (useColorize) {
+    const color: FloorColor = { h: hue, s: 50, b: 0, c: 0, colorize: true }
+    shifted = colorizeSprite(sprite, color)
+  } else {
+    const color: FloorColor = { h: hue, s: 0, b: 0, c: 0 }
+    shifted = adjustSprite(sprite, color)
+  }
   hueShiftedPetCache.set(fullKey, shifted)
   return shifted
 }

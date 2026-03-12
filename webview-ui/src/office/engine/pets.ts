@@ -286,7 +286,10 @@ export function getPetSprite(pet: Pet): SpriteData {
     sprite = pet.sprites.idle[idx]
     cacheKey = `${pet.configId}:idle:${idx}`
   }
-  return getHueShiftedPetSprite(sprite, pet.hue, cacheKey)
+  // Cat sprites are grayscale — use colorize mode to tint them.
+  // Dog sprites have natural colors — use adjust mode to rotate hue.
+  const useColorize = pet.sprites === CAT_SPRITES
+  return getHueShiftedPetSprite(sprite, pet.hue, cacheKey, useColorize)
 }
 
 function getDirectionalWalkSprites(pet: Pet): SpriteData[] | undefined {
