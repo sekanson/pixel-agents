@@ -801,56 +801,44 @@
     {
       "uid": "f001",
       "type": "ASSET_84",
-      "col": 4,
-      "row": 0
+      "col": 10,
+      "row": -1
     },
     {
       "uid": "f002",
       "type": "ASSET_63",
       "col": 8,
-      "row": 0
+      "row": -1
     },
     {
       "uid": "f010",
       "type": "ASSET_42",
       "col": 1,
-      "row": 1
+      "row": 0
     },
     {
       "uid": "f011",
       "type": "ASSET_40",
-      "col": 3,
-      "row": 1
+      "col": 2,
+      "row": 0
     },
     {
       "uid": "f020",
       "type": "ASSET_136",
       "col": 1,
-      "row": 3
-    },
-    {
-      "uid": "f021",
-      "type": "ASSET_137",
-      "col": 3,
-      "row": 3
+      "row": 4
     },
     {
       "uid": "f022",
       "type": "ASSET_136",
       "col": 1,
-      "row": 5
+      "row": 6
     },
     {
       "uid": "f023",
       "type": "ASSET_135",
       "col": 3,
-      "row": 5
-    },
-    {
-      "uid": "f024",
-      "type": "ASSET_139",
-      "col": 1,
-      "row": 7
+      "row": 6
     },
     {
       "uid": "f030",
@@ -861,7 +849,7 @@
     {
       "uid": "f031",
       "type": "ASSET_90",
-      "col": 6,
+      "col": 7,
       "row": 3
     },
     {
@@ -874,13 +862,13 @@
       "uid": "f040",
       "type": "ASSET_27_B_A_B_B_B_A",
       "col": 10,
-      "row": 1
+      "row": 2
     },
     {
       "uid": "f041",
       "type": "ASSET_27_B_A_B_A",
       "col": 10,
-      "row": 3
+      "row": 4
     },
     {
       "uid": "f042",
@@ -891,14 +879,26 @@
     {
       "uid": "f050",
       "type": "ASSET_49",
-      "col": 5,
-      "row": 7
+      "col": 8,
+      "row": 1
     },
     {
       "uid": "f060",
       "type": "ASSET_44",
-      "col": 9,
-      "row": 7
+      "col": 10,
+      "row": 1
+    },
+    {
+      "uid": "f-1773351060473-icb4",
+      "type": "ASSET_49",
+      "col": 3,
+      "row": 3
+    },
+    {
+      "uid": "f-1773351083699-ehmt",
+      "type": "ASSET_XIX_LOGO",
+      "col": 5,
+      "row": -1
     }
   ]
 }
